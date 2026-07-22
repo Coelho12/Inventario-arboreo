@@ -244,6 +244,27 @@
             margin-top: 8px;
             text-align: center;
         }
+
+        .loading {
+            display: inline-block;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        #progresso {
+            display: none;
+            text-align: center;
+            padding: 10px;
+            background: #f0fdf4;
+            border-radius: 8px;
+            margin: 10px 0;
+            color: var(--primary);
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -369,8 +390,12 @@
             </div>
         </fieldset>
 
+        <div id="progresso">
+            <span class="loading">⏳</span> Codificando imagens... Aguarde!
+        </div>
+
         <div class="btn-container">
-            <button type="button" class="btn-export" onclick="gerarKML()">🗺️ Gerar e Baixar .KML (Google Earth / QGIS)</button>
+            <button type="button" class="btn-export" onclick="gerarKML()">🗺️ Gerar e Baixar .KML (com fotos)</button>
             <button type="button" class="btn-export-csv" onclick="gerarCSV()">📊 Baixar também em .CSV (Excel)</button>
         </div>
     </form>
@@ -380,7 +405,35 @@
     // Define a data atual no input de data
     document.getElementById('fd_data_coleta').valueAsDate = new Date();
 
-    // 1. CAPTURA DE GPS VIA NAVEGADOR (CORRIGIDO)
+    // Variável global para armazenar as imagens em Base64
+    let imagensBase64 = [];
+
+    // 1. PREVIEW DAS FOTOS E ARMAZENAMENTO EM BASE64
+    function previewImagens(event) {
+        const previewBox = document.getElementById("previewBox");
+        previewBox.innerHTML = "";
+        imagensBase64 = []; // Limpa o array global
+        const files = event.target.files;
+
+        if (files && files.length > 0) {
+            Array.from(files).forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    // Armazena a imagem em Base64
+                    imagensBase64.push(e.target.result);
+                    
+                    // Mostra o preview
+                    const img = document.createElement("img");
+                    img.src = e.target.result;
+                    img.title = `Foto ${index + 1}`;
+                    previewBox.appendChild(img);
+                }
+                reader.readAsDataURL(file);
+            });
+        }
+    }
+
+    // 2. CAPTURA DE GPS
     function obterCoordenadas() {
         const status = document.getElementById("gps_status");
         const latInput = document.getElementById("fd_lat");
@@ -388,11 +441,19 @@
         const altInput = document.getElementById("fd_altitude");
         const precInput = document.getElementById("fd_precisao");
 
-        // Reset status
         status.textContent = "⏳ Obtendo sinal do GPS...";
         status.className = "gps-status";
 
-        // Verifica se o navegador suporta geolocalização
+        // Verifica se está em HTTPS
+        if (window.location.protocol === 'http:' && 
+            window.location.hostname !== 'localhost' && 
+            window.location.hostname !== '127.0.0.1') {
+            status.textContent = "⚠️ GPS pode ser bloqueado. Use HTTPS ou Live Server.";
+            status.className = "gps-status error";
+            usarCoordenadasExemplo();
+            return;
+        }
+
         if (!navigator.geolocation) {
             status.textContent = "❌ Seu navegador não suporta geolocalização.";
             status.className = "gps-status error";
@@ -400,14 +461,12 @@
             return;
         }
 
-        // Opções de alta precisão
         const options = {
             enableHighAccuracy: true,
             timeout: 15000,
             maximumAge: 0
         };
 
-        // Função de sucesso
         function success(pos) {
             const lat = pos.coords.latitude.toFixed(6);
             const lng = pos.coords.longitude.toFixed(6);
@@ -423,20 +482,19 @@
             status.className = "gps-status success";
         }
 
-        // Função de erro
         function error(err) {
             console.error("Erro GPS:", err);
             
             let mensagem = "❌ ";
             switch(err.code) {
                 case err.PERMISSION_DENIED:
-                    mensagem += "Permissão de localização negada. Por favor, permita o acesso ao GPS.";
+                    mensagem += "Permissão de localização negada. Permita o acesso ao GPS.";
                     break;
                 case err.POSITION_UNAVAILABLE:
                     mensagem += "Sinal de GPS indisponível. Tente se movimentar para uma área aberta.";
                     break;
                 case err.TIMEOUT:
-                    mensagem += "Tempo limite excedido. O GPS está demorando muito para responder.";
+                    mensagem += "Tempo limite excedido. O GPS está demorando muito.";
                     break;
                 default:
                     mensagem += "Erro ao acessar o GPS: " + err.message;
@@ -444,56 +502,54 @@
             
             status.textContent = mensagem;
             status.className = "gps-status error";
-            
-            // Sugere usar coordenadas de exemplo para teste
             usarCoordenadasExemplo();
         }
 
-        // Tenta obter a posição
         navigator.geolocation.getCurrentPosition(success, error, options);
     }
 
-    // Função para usar coordenadas de exemplo (fallback)
     function usarCoordenadasExemplo() {
         const latInput = document.getElementById("fd_lat");
         const lngInput = document.getElementById("fd_lng");
         const altInput = document.getElementById("fd_altitude");
         const precInput = document.getElementById("fd_precisao");
-        const status = document.getElementById("gps_status");
 
-        // Verifica se os campos estão vazios ou com placeholder
         if (!latInput.value || latInput.value === "") {
-            // Usa coordenadas de exemplo (Belém, PA - Brasil)
             latInput.value = "-1.455800";
             lngInput.value = "-48.490200";
             altInput.value = "10";
             precInput.value = "15";
             
-            status.textContent = "💡 Usando coordenadas de exemplo. Para dados reais, ative o GPS do dispositivo.";
+            const status = document.getElementById("gps_status");
+            status.textContent = "💡 Usando coordenadas de exemplo. Ative o GPS para dados reais.";
             status.className = "gps-status";
         }
     }
 
-    // 2. PREVIEW DAS FOTOS
-    function previewImagens(event) {
-        const previewBox = document.getElementById("previewBox");
-        previewBox.innerHTML = "";
-        const files = event.target.files;
-
-        if (files && files.length > 0) {
-            Array.from(files).forEach(file => {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const img = document.createElement("img");
-                    img.src = e.target.result;
-                    previewBox.appendChild(img);
-                }
-                reader.readAsDataURL(file);
-            });
+    // 3. FUNÇÃO PARA GERAR HTML DAS FOTOS NO KML
+    function gerarGaleriaFotos() {
+        if (imagensBase64.length === 0) {
+            return '<p><i>Nenhuma foto anexada.</i></p>';
         }
+
+        let html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 10px;">';
+        
+        imagensBase64.forEach((imgBase64, index) => {
+            html += `
+                <div style="border: 1px solid #ddd; border-radius: 8px; overflow: hidden; background: #f9f9f9;">
+                    <img src="${imgBase64}" alt="Foto ${index + 1}" style="width: 100%; height: 200px; object-fit: cover; display: block;">
+                    <div style="padding: 8px; font-size: 0.8rem; text-align: center; background: #f0f0f0;">
+                        Foto ${index + 1}
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        return html;
     }
 
-    // Função utilitária de sanitização XML/KML
+    // 4. ESCAPE XML
     function escapeXML(str) {
         if (!str) return "";
         return String(str)
@@ -504,7 +560,7 @@
             .replace(/'/g, '&apos;');
     }
 
-    // 3. GERADOR DE ARQUIVO .KML (CORRIGIDO)
+    // 5. GERADOR DE KML COM FOTOS
     function gerarKML() {
         const coletor = document.getElementById("fd_nome_coletor").value.trim();
         if (!coletor) {
@@ -517,28 +573,33 @@
         const lng = document.getElementById("fd_lng").value;
         const alt = document.getElementById("fd_altitude").value || "0";
 
-        // CORREÇÃO: Verifica se as coordenadas foram preenchidas
         if (!lat || !lng || lat === "" || lng === "") {
-            alert("As coordenadas GPS são necessárias para gerar o arquivo KML. Clique em 'Obter Coordenadas Atuais' ou insira manualmente.");
-            document.getElementById("fd_lat").focus();
+            alert("As coordenadas GPS são necessárias. Clique em 'Obter Coordenadas Atuais'.");
             return;
         }
 
-        const dataColeta = document.getElementById("fd_data_coleta").value;
-        const nomeComum = document.getElementById("fd_nome_comum").value.trim() || "Árvore Não Identificada";
-        const nomeCientifico = document.getElementById("fd_nome_cientifico").value.trim() || "Não informado";
-        const certeza = document.getElementById("fd_certeza").value;
-        const altura = document.getElementById("fd_altura").value || "N/I";
-        const cap = document.getElementById("fd_cap").value || "N/I";
-        const saude = document.getElementById("fd_saude").value;
-        const obs = document.getElementById("fd_obs").value.trim() || "Nenhuma observação registrada.";
-        const precisao = document.getElementById("fd_precisao").value || "N/I";
+        // Mostra progresso
+        const progresso = document.getElementById("progresso");
+        progresso.style.display = "block";
 
-        const fotosInput = document.getElementById("fd_fotos");
-        const qtdFotos = fotosInput.files ? fotosInput.files.length : 0;
+        // Pequeno delay para mostrar o progresso
+        setTimeout(() => {
+            const dataColeta = document.getElementById("fd_data_coleta").value;
+            const nomeComum = document.getElementById("fd_nome_comum").value.trim() || "Árvore Não Identificada";
+            const nomeCientifico = document.getElementById("fd_nome_cientifico").value.trim() || "Não informado";
+            const certeza = document.getElementById("fd_certeza").value;
+            const altura = document.getElementById("fd_altura").value || "N/I";
+            const cap = document.getElementById("fd_cap").value || "N/I";
+            const saude = document.getElementById("fd_saude").value;
+            const obs = document.getElementById("fd_obs").value.trim() || "Nenhuma observação registrada.";
+            const precisao = document.getElementById("fd_precisao").value || "N/I";
+            const qtdFotos = imagensBase64.length;
 
-        // CORREÇÃO: Usa lat e lng corretamente nas coordenadas
-        const kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
+            // Gera a galeria de fotos
+            const galeriaFotos = gerarGaleriaFotos();
+
+            // Conteúdo do KML com fotos embutidas
+            const kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
     <name>Inventario_Arboreo_${escapeXML(nomeComum)}</name>
@@ -554,19 +615,42 @@
     <Placemark>
       <name>${escapeXML(nomeComum)}</name>
       <description><![CDATA[
-        <div style="font-family: Arial, sans-serif; padding: 5px;">
-          <h3 style="color: #15803d; margin-top:0;">${escapeXML(nomeComum)}</h3>
+        <div style="font-family: Arial, sans-serif; padding: 10px; max-width: 600px;">
+          <h2 style="color: #15803d; margin-top:0; border-bottom: 2px solid #15803d; padding-bottom: 8px;">
+            🌳 ${escapeXML(nomeComum)}
+          </h2>
           <p><b>Nome Científico:</b> <i>${escapeXML(nomeCientifico)}</i></p>
-          <hr>
-          <p><b>Coletor / Pesquisador:</b> ${escapeXML(coletor)}</p>
-          <p><b>Data da Coleta:</b> ${escapeXML(dataColeta)}</p>
-          <p><b>Certeza da Identificação:</b> ${escapeXML(certeza)}</p>
-          <p><b>Altura Estimada:</b> ${escapeXML(altura)} m</p>
-          <p><b>CAP:</b> ${escapeXML(cap)} cm</p>
-          <p><b>Estado de Saúde:</b> ${escapeXML(saude)}</p>
-          <p><b>Precisão do GPS:</b> ${escapeXML(precisao)} m</p>
-          <p><b>Fotos Anexadas no Campo:</b> ${qtdFotos}</p>
-          <p><b>Observações:</b> ${escapeXML(obs)}</p>
+          
+          <hr style="margin: 12px 0;">
+          
+          <table style="width: 100%; border-collapse: collapse; font-size: 0.95rem;">
+            <tr><td style="padding: 4px 0;"><b>Coletor / Pesquisador:</b></td><td style="padding: 4px 0;">${escapeXML(coletor)}</td></tr>
+            <tr><td style="padding: 4px 0;"><b>Data da Coleta:</b></td><td style="padding: 4px 0;">${escapeXML(dataColeta)}</td></tr>
+            <tr><td style="padding: 4px 0;"><b>Certeza da Identificação:</b></td><td style="padding: 4px 0;">${escapeXML(certeza)}</td></tr>
+            <tr><td style="padding: 4px 0;"><b>Altura Estimada:</b></td><td style="padding: 4px 0;">${escapeXML(altura)} m</td></tr>
+            <tr><td style="padding: 4px 0;"><b>CAP:</b></td><td style="padding: 4px 0;">${escapeXML(cap)} cm</td></tr>
+            <tr><td style="padding: 4px 0;"><b>Estado de Saúde:</b></td><td style="padding: 4px 0;">${escapeXML(saude)}</td></tr>
+            <tr><td style="padding: 4px 0;"><b>Precisão do GPS:</b></td><td style="padding: 4px 0;">${escapeXML(precisao)} m</td></tr>
+            <tr><td style="padding: 4px 0;"><b>Fotos Anexadas:</b></td><td style="padding: 4px 0;">${qtdFotos}</td></tr>
+          </table>
+          
+          <hr style="margin: 12px 0;">
+          
+          <div style="background: #f8fafc; padding: 10px; border-radius: 6px; margin: 10px 0;">
+            <b>📝 Observações:</b><br>
+            ${escapeXML(obs)}
+          </div>
+          
+          <hr style="margin: 12px 0;">
+          
+          <div style="margin: 10px 0;">
+            <b>📸 Galeria de Fotos (${qtdFotos}):</b>
+            ${galeriaFotos}
+          </div>
+          
+          <div style="margin-top: 15px; font-size: 0.8rem; color: #64748b; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 10px;">
+            Coordenadas: ${lat}, ${lng} | Altitude: ${alt}m
+          </div>
         </div>
       ]]></description>
       <styleUrl>#treeIcon</styleUrl>
@@ -577,20 +661,25 @@
   </Document>
 </kml>`;
 
-        const blob = new Blob([kmlContent], { type: 'application/vnd.google-earth.kml+xml;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        
-        const nomeArquivoClean = nomeComum.toLowerCase().replace(/[^a-z0-9]/g, "_");
-        link.href = url;
-        link.download = `Arvore_${nomeArquivoClean}_${Date.now()}.kml`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+            // Download do KML
+            const blob = new Blob([kmlContent], { type: 'application/vnd.google-earth.kml+xml;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            
+            const nomeArquivoClean = nomeComum.toLowerCase().replace(/[^a-z0-9]/g, "_");
+            link.href = url;
+            link.download = `Arvore_${nomeArquivoClean}_${Date.now()}.kml`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            // Esconde progresso
+            progresso.style.display = "none";
+        }, 100);
     }
 
-    // 4. GERADOR COMPLEMENTAR DE .CSV
+    // 6. GERADOR DE CSV
     function gerarCSV() {
         const coletor = document.getElementById("fd_nome_coletor").value.trim();
         if (!coletor) {
@@ -599,9 +688,6 @@
             return;
         }
 
-        const fotosInput = document.getElementById("fd_fotos");
-        const qtdFotos = fotosInput.files ? fotosInput.files.length : 0;
-
         const dados = [
             { id: "Nome_Coletor", valor: coletor },
             { id: "Data_Coleta", valor: document.getElementById("fd_data_coleta").value },
@@ -609,7 +695,7 @@
             { id: "Longitude", valor: document.getElementById("fd_lng").value },
             { id: "Altitude_m", valor: document.getElementById("fd_altitude").value },
             { id: "Precisao_GPS_m", valor: document.getElementById("fd_precisao").value },
-            { id: "Qtd_Fotos", valor: qtdFotos },
+            { id: "Qtd_Fotos", valor: imagensBase64.length },
             { id: "Nome_Popular", valor: document.getElementById("fd_nome_comum").value },
             { id: "Nome_Cientifico", valor: document.getElementById("fd_nome_cientifico").value },
             { id: "Nivel_Certeza", valor: document.getElementById("fd_certeza").value },
@@ -637,8 +723,7 @@
 
     // Inicializa tentando obter coordenadas automaticamente
     window.addEventListener('load', function() {
-        // Pequeno delay para carregar a página
-        setTimeout(obterCoordenadas, 1000);
+        setTimeout(obterCoordenadas, 1500);
     });
 </script>
 
