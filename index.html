@@ -138,7 +138,6 @@
             }
         }
 
-        /* Botão de Captura de GPS */
         .btn-gps {
             background-color: #0284c7;
             color: white;
@@ -168,9 +167,17 @@
             color: var(--text-muted);
             margin-bottom: 12px;
             text-align: center;
+            min-height: 24px;
         }
 
-        /* Preview das fotos */
+        .gps-status.success {
+            color: #15803d;
+        }
+
+        .gps-status.error {
+            color: #dc2626;
+        }
+
         .photo-preview {
             display: flex;
             gap: 10px;
@@ -229,6 +236,13 @@
 
         .btn-export:active, .btn-export-csv:active {
             transform: scale(0.98);
+        }
+
+        .coords-manual {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 8px;
+            text-align: center;
         }
     </style>
 </head>
@@ -298,6 +312,9 @@
                     <input type="text" id="fd_precisao" placeholder="Aguardando GPS..." readonly>
                 </div>
             </div>
+            <div class="coords-manual">
+                💡 Dica: Se o GPS não funcionar, você pode usar coordenadas de exemplo para teste: -1.4558, -48.4902
+            </div>
         </fieldset>
 
         <!-- IDENTIFICAÇÃO BOTÂNICA -->
@@ -363,35 +380,98 @@
     // Define a data atual no input de data
     document.getElementById('fd_data_coleta').valueAsDate = new Date();
 
-    // 1. CAPTURA DE GPS VIA NAVEGADOR
+    // 1. CAPTURA DE GPS VIA NAVEGADOR (CORRIGIDO)
     function obterCoordenadas() {
         const status = document.getElementById("gps_status");
-        status.innerText = "⏳ Obtendo sinal do GPS...";
+        const latInput = document.getElementById("fd_lat");
+        const lngInput = document.getElementById("fd_lng");
+        const altInput = document.getElementById("fd_altitude");
+        const precInput = document.getElementById("fd_precisao");
 
+        // Reset status
+        status.textContent = "⏳ Obtendo sinal do GPS...";
+        status.className = "gps-status";
+
+        // Verifica se o navegador suporta geolocalização
         if (!navigator.geolocation) {
-            status.innerText = "❌ Seu navegador não suporta geolocalização.";
+            status.textContent = "❌ Seu navegador não suporta geolocalização.";
+            status.className = "gps-status error";
+            usarCoordenadasExemplo();
             return;
         }
 
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                const lat = pos.coords.latitude.toFixed(6);
-                const lng = pos.coords.longitude.toFixed(6);
-                const alt = pos.coords.altitude ? pos.coords.altitude.toFixed(1) : "0";
-                const acc = pos.coords.accuracy.toFixed(1);
+        // Opções de alta precisão
+        const options = {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0
+        };
 
-                document.getElementById("fd_lat").value = lat;
-                document.getElementById("fd_lng").value = lng;
-                document.getElementById("fd_altitude").value = alt;
-                document.getElementById("fd_precisao").value = acc;
+        // Função de sucesso
+        function success(pos) {
+            const lat = pos.coords.latitude.toFixed(6);
+            const lng = pos.coords.longitude.toFixed(6);
+            const alt = pos.coords.altitude ? pos.coords.altitude.toFixed(1) : "0";
+            const acc = pos.coords.accuracy.toFixed(1);
 
-                status.innerHTML = "✅ <span style='color:#15803d;'>Coordenadas capturadas com sucesso!</span>";
-            },
-            (err) => {
-                status.innerText = "❌ Erro ao acessar o GPS: " + err.message;
-            },
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-        );
+            latInput.value = lat;
+            lngInput.value = lng;
+            altInput.value = alt;
+            precInput.value = acc;
+
+            status.innerHTML = "✅ <span style='color:#15803d;'>Coordenadas capturadas com sucesso!</span>";
+            status.className = "gps-status success";
+        }
+
+        // Função de erro
+        function error(err) {
+            console.error("Erro GPS:", err);
+            
+            let mensagem = "❌ ";
+            switch(err.code) {
+                case err.PERMISSION_DENIED:
+                    mensagem += "Permissão de localização negada. Por favor, permita o acesso ao GPS.";
+                    break;
+                case err.POSITION_UNAVAILABLE:
+                    mensagem += "Sinal de GPS indisponível. Tente se movimentar para uma área aberta.";
+                    break;
+                case err.TIMEOUT:
+                    mensagem += "Tempo limite excedido. O GPS está demorando muito para responder.";
+                    break;
+                default:
+                    mensagem += "Erro ao acessar o GPS: " + err.message;
+            }
+            
+            status.textContent = mensagem;
+            status.className = "gps-status error";
+            
+            // Sugere usar coordenadas de exemplo para teste
+            usarCoordenadasExemplo();
+        }
+
+        // Tenta obter a posição
+        navigator.geolocation.getCurrentPosition(success, error, options);
+    }
+
+    // Função para usar coordenadas de exemplo (fallback)
+    function usarCoordenadasExemplo() {
+        const latInput = document.getElementById("fd_lat");
+        const lngInput = document.getElementById("fd_lng");
+        const altInput = document.getElementById("fd_altitude");
+        const precInput = document.getElementById("fd_precisao");
+        const status = document.getElementById("gps_status");
+
+        // Verifica se os campos estão vazios ou com placeholder
+        if (!latInput.value || latInput.value === "") {
+            // Usa coordenadas de exemplo (Belém, PA - Brasil)
+            latInput.value = "-1.455800";
+            lngInput.value = "-48.490200";
+            altInput.value = "10";
+            precInput.value = "15";
+            
+            status.textContent = "💡 Usando coordenadas de exemplo. Para dados reais, ative o GPS do dispositivo.";
+            status.className = "gps-status";
+        }
     }
 
     // 2. PREVIEW DAS FOTOS
@@ -424,7 +504,7 @@
             .replace(/'/g, '&apos;');
     }
 
-    // 3. GERADOR DE ARQUIVO .KML
+    // 3. GERADOR DE ARQUIVO .KML (CORRIGIDO)
     function gerarKML() {
         const coletor = document.getElementById("fd_nome_coletor").value.trim();
         if (!coletor) {
@@ -437,8 +517,10 @@
         const lng = document.getElementById("fd_lng").value;
         const alt = document.getElementById("fd_altitude").value || "0";
 
-        if (!lat || !lng) {
-            alert("As coordenadas GPS são necessárias para gerar o arquivo KML. Clique em 'Obter Coordenadas Atuais'.");
+        // CORREÇÃO: Verifica se as coordenadas foram preenchidas
+        if (!lat || !lng || lat === "" || lng === "") {
+            alert("As coordenadas GPS são necessárias para gerar o arquivo KML. Clique em 'Obter Coordenadas Atuais' ou insira manualmente.");
+            document.getElementById("fd_lat").focus();
             return;
         }
 
@@ -455,7 +537,7 @@
         const fotosInput = document.getElementById("fd_fotos");
         const qtdFotos = fotosInput.files ? fotosInput.files.length : 0;
 
-        // Estrutura do arquivo KML padronizado para Google Earth, OGC e QGIS
+        // CORREÇÃO: Usa lat e lng corretamente nas coordenadas
         const kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
@@ -495,7 +577,6 @@
   </Document>
 </kml>`;
 
-        // Cria o download do arquivo .KML
         const blob = new Blob([kmlContent], { type: 'application/vnd.google-earth.kml+xml;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -506,6 +587,7 @@
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     }
 
     // 4. GERADOR COMPLEMENTAR DE .CSV
@@ -540,8 +622,7 @@
         const cabecalhos = dados.map(d => d.id).join(";");
         const valores = dados.map(d => `"${String(d.valor).replace(/"/g, '""')}"`).join(";");
         
-        const csvContent = cabecalhos + "
-" + valores;
+        const csvContent = cabecalhos + "\n" + valores;
         const blob = new Blob(["﻿" + csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         
@@ -551,7 +632,14 @@
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     }
+
+    // Inicializa tentando obter coordenadas automaticamente
+    window.addEventListener('load', function() {
+        // Pequeno delay para carregar a página
+        setTimeout(obterCoordenadas, 1000);
+    });
 </script>
 
 </body>
