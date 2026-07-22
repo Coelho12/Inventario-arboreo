@@ -265,6 +265,122 @@
             color: var(--primary);
             font-weight: 600;
         }
+
+        /* ESTILOS PARA BUSCA OFFLINE/ONLINE */
+        .searching {
+            display: none;
+            font-size: 0.85rem;
+            color: #0d9488;
+            margin-top: 5px;
+            padding: 8px 12px;
+            background: #f0fdfa;
+            border-radius: 6px;
+            border-left: 3px solid #0d9488;
+        }
+        
+        .searching.active {
+            display: block;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .suggestion-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #e2e8f0;
+            transition: background 0.2s;
+        }
+        
+        .suggestion-item:hover {
+            background: #f1f5f9;
+        }
+        
+        .suggestion-item .sci-name {
+            font-style: italic;
+            color: #15803d;
+        }
+        
+        .suggestion-item .common-name {
+            color: #64748b;
+            font-size: 0.85rem;
+        }
+        
+        .suggestions-box {
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            background: white;
+            margin-top: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .suggestions-box.active {
+            display: block;
+        }
+
+        .status-offline {
+            display: none;
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            color: #92400e;
+            margin-bottom: 8px;
+        }
+
+        .status-offline.active {
+            display: block;
+        }
+
+        .btn-search-manual {
+            background: #e2e8f0;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            color: #475569;
+            transition: background 0.2s;
+        }
+
+        .btn-search-manual:hover {
+            background: #cbd5e1;
+        }
+
+        .field-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 4px;
+            flex-wrap: wrap;
+        }
+
+        .badge-offline {
+            background: #f59e0b;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            display: inline-block;
+        }
+
+        .badge-online {
+            background: #10b981;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            display: inline-block;
+        }
     </style>
 </head>
 <body>
@@ -338,26 +454,63 @@
             </div>
         </fieldset>
 
-        <!-- IDENTIFICAÇÃO BOTÂNICA -->
+        <!-- IDENTIFICAÇÃO BOTÂNICA (COM SUPORTE OFFLINE) -->
         <fieldset>
             <legend>3. Identificação Botânica</legend>
+            
+            <!-- Indicador de status da conexão -->
+            <div class="status-offline" id="statusOffline">
+                <span style="font-weight: 700;">📡</span> 
+                <span id="statusMessage">Você está offline. A busca automática não estará disponível.</span>
+                <br><small style="color: #78350f;">Preencha o nome científico manualmente ou conecte-se à internet para usar a busca.</small>
+            </div>
+            
             <div class="grid-row">
                 <div class="form-group">
                     <label for="fd_nome_comum">Nome Popular / Comum:</label>
-                    <input type="text" id="fd_nome_comum" placeholder="Ex: Castanheira, Ipê-Amarelo, Samaúma">
+                    <input type="text" id="fd_nome_comum" placeholder="Ex: Castanheira, Ipê-Amarelo, Samaúma" 
+                           oninput="buscarNomeCientifico(this.value)" autocomplete="off">
+                    <div class="searching" id="searchingIndicator">🔍 Buscando nome científico...</div>
+                    <div class="suggestions-box" id="suggestionsBox"></div>
+                    <div class="field-actions">
+                        <small style="color: var(--text-muted);">
+                            * Digite o nome popular e aguarde a sugestão automática (se online)
+                        </small>
+                        <button type="button" class="btn-search-manual" onclick="limparSugestoes()">
+                            ✖ Limpar sugestões
+                        </button>
+                    </div>
                 </div>
                 <div class="form-group">
-                    <label for="fd_nome_cientifico">Nome Científico (se souber):</label>
-                    <input type="text" id="fd_nome_cientifico" placeholder="Ex: Handroanthus albus">
+                    <label for="fd_nome_cientifico">Nome Científico:</label>
+                    <input type="text" id="fd_nome_cientifico" placeholder="Digite manualmente ou aguarde sugestão">
+                    <div class="field-actions">
+                        <button type="button" onclick="buscarNomeCientifico(document.getElementById('fd_nome_comum').value)" 
+                                style="padding: 4px 12px; background: #e2e8f0; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+                            🔍 Buscar agora
+                        </button>
+                        <button type="button" onclick="limparBusca()" 
+                                style="padding: 4px 12px; background: #fee2e2; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; color: #991b1b;">
+                            🗑️ Limpar
+                        </button>
+                    </div>
+                    <small style="color: var(--text-muted); display: block; margin-top: 4px;">
+                        <span id="statusOnlineBadge" class="badge-online">● Online</span>
+                        <span id="statusOfflineBadge" class="badge-offline" style="display:none;">● Offline</span>
+                        <span id="lastSearchInfo" style="font-size: 0.75rem; color: #94a3b8;"></span>
+                    </small>
                 </div>
             </div>
             <div class="form-group">
                 <label for="fd_certeza">Nível de Certeza da Identificação:</label>
                 <select id="fd_certeza">
                     <option value="Certeza Absoluta">Certeza Absoluta</option>
-                    <option value="Provável">Provável (Necessita confirmação)</option>
+                    <option value="Provável" selected>Provável (Necessita confirmação)</option>
                     <option value="Desconhecida / Dúvida">Desconhecida (Exige avaliação botânica)</option>
                 </select>
+                <small style="color: var(--text-muted); display: block; margin-top: 4px;">
+                    * Ajuste manualmente conforme sua confiança na identificação
+                </small>
             </div>
         </fieldset>
 
@@ -402,27 +555,317 @@
 </div>
 
 <script>
-    // Define a data atual no input de data
-    document.getElementById('fd_data_coleta').valueAsDate = new Date();
+    // ============================================================
+    // 1. DETECÇÃO DE STATUS ONLINE/OFFLINE
+    // ============================================================
+    const statusOfflineDiv = document.getElementById('statusOffline');
+    const statusMessage = document.getElementById('statusMessage');
+    const statusOnlineBadge = document.getElementById('statusOnlineBadge');
+    const statusOfflineBadge = document.getElementById('statusOfflineBadge');
+    const lastSearchInfo = document.getElementById('lastSearchInfo');
 
-    // Variável global para armazenar as imagens em Base64
+    function atualizarStatusConexao() {
+        const online = navigator.onLine;
+        
+        if (online) {
+            statusOfflineDiv.classList.remove('active');
+            statusOnlineBadge.style.display = 'inline-block';
+            statusOfflineBadge.style.display = 'none';
+            statusMessage.textContent = 'Você está online. A busca automática está disponível.';
+        } else {
+            statusOfflineDiv.classList.add('active');
+            statusOnlineBadge.style.display = 'none';
+            statusOfflineBadge.style.display = 'inline-block';
+            statusMessage.textContent = '⚠️ Você está offline. A busca automática não está disponível.';
+        }
+    }
+
+    // Detecta mudanças na conexão
+    window.addEventListener('online', atualizarStatusConexao);
+    window.addEventListener('offline', atualizarStatusConexao);
+    
+    // Inicializa status
+    atualizarStatusConexao();
+
+    // ============================================================
+    // 2. BUSCA DE NOME CIENTÍFICO (COM SUPORTE OFFLINE)
+    // ============================================================
+    let timeoutBusca = null;
+    let sugestoesAtuais = [];
+    let ultimaBusca = '';
+
+    async function buscarNomeCientifico(nomePopular) {
+        const nomeCientificoInput = document.getElementById('fd_nome_cientifico');
+        const searchingIndicator = document.getElementById('searchingIndicator');
+        const suggestionsBox = document.getElementById('suggestionsBox');
+        
+        // Limpa timeout anterior
+        if (timeoutBusca) {
+            clearTimeout(timeoutBusca);
+        }
+
+        // Remove espaços extras e verifica se tem conteúdo
+        const termo = nomePopular.trim();
+        if (!termo || termo.length < 3) {
+            searchingIndicator.classList.remove('active');
+            suggestionsBox.classList.remove('active');
+            suggestionsBox.innerHTML = '';
+            ultimaBusca = '';
+            lastSearchInfo.textContent = '';
+            return;
+        }
+
+        // VERIFICA SE ESTÁ OFFLINE
+        if (!navigator.onLine) {
+            searchingIndicator.classList.remove('active');
+            suggestionsBox.innerHTML = `
+                <div style="padding: 12px; color: #92400e; text-align: center; background: #fef3c7;">
+                    <span style="font-size: 1.2rem;">📡</span><br>
+                    <strong>Você está offline.</strong><br>
+                    <small>Digite o nome científico manualmente no campo abaixo.</small>
+                </div>
+            `;
+            suggestionsBox.classList.add('active');
+            return;
+        }
+
+        // Mostra indicador de busca
+        searchingIndicator.classList.add('active');
+        suggestionsBox.classList.remove('active');
+
+        // Aguarda o usuário parar de digitar (debounce)
+        timeoutBusca = setTimeout(async () => {
+            try {
+                // Tenta buscar no GBIF
+                const resultados = await buscarGBIF(termo);
+                
+                searchingIndicator.classList.remove('active');
+                ultimaBusca = new Date().toLocaleTimeString();
+                lastSearchInfo.textContent = `Última busca: ${ultimaBusca}`;
+                
+                if (resultados && resultados.length > 0) {
+                    // Mostra sugestões
+                    mostrarSugestoes(resultados, suggestionsBox);
+                    suggestionsBox.classList.add('active');
+                    
+                    // Auto-preenche com o primeiro resultado se houver apenas 1
+                    if (resultados.length === 1) {
+                        nomeCientificoInput.value = resultados[0].cientifico;
+                        // Não substitui o nome popular que o usuário digitou
+                    }
+                } else {
+                    // Tenta iNaturalist como fallback
+                    const resultadosINat = await buscarINaturalist(termo);
+                    if (resultadosINat && resultadosINat.length > 0) {
+                        mostrarSugestoes(resultadosINat, suggestionsBox);
+                        suggestionsBox.classList.add('active');
+                    } else {
+                        suggestionsBox.innerHTML = `
+                            <div style="padding: 12px; color: #64748b; text-align: center;">
+                                <span style="font-size: 1.2rem;">🔍</span><br>
+                                Nenhuma sugestão encontrada para "<strong>${termo}</strong>"<br>
+                                <small style="color: #94a3b8;">Preencha o nome científico manualmente abaixo.</small>
+                            </div>
+                        `;
+                        suggestionsBox.classList.add('active');
+                    }
+                }
+            } catch (error) {
+                console.error('Erro na busca:', error);
+                searchingIndicator.classList.remove('active');
+                suggestionsBox.innerHTML = `
+                    <div style="padding: 12px; color: #dc2626; text-align: center;">
+                        ⚠️ Erro ao buscar. Verifique sua conexão.<br>
+                        <small style="color: #94a3b8;">Preencha o nome científico manualmente.</small>
+                    </div>
+                `;
+                suggestionsBox.classList.add('active');
+            }
+        }, 800);
+    }
+
+    // ============================================================
+    // 3. FUNÇÕES DE BUSCA NAS APIS
+    // ============================================================
+    async function buscarGBIF(termo) {
+        try {
+            const url = `https://api.gbif.org/v1/species/search?q=${encodeURIComponent(termo)}&limit=5&country=BR&language=por`;
+            
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (!data.results || data.results.length === 0) {
+                return [];
+            }
+
+            const resultados = data.results.map(item => {
+                const cientifico = item.scientificName || item.canonicalName || '';
+                let popular = '';
+                if (item.vernacularNames && item.vernacularNames.length > 0) {
+                    const portugues = item.vernacularNames.find(v => v.language === 'por' || v.language === 'pt');
+                    popular = portugues ? portugues.vernacularName : item.vernacularNames[0].vernacularName;
+                }
+                
+                return {
+                    cientifico: cientifico,
+                    popular: popular || termo,
+                    autor: item.scientificNameAuthorship || '',
+                    rank: item.rank || '',
+                    match: item.matchType || ''
+                };
+            });
+
+            const filtrados = resultados.filter(r => 
+                r.rank !== 'FAMILY' && r.rank !== 'GENUS' && r.rank !== 'ORDER'
+            );
+
+            return filtrados.length > 0 ? filtrados : resultados;
+
+        } catch (error) {
+            console.error('Erro no GBIF:', error);
+            return [];
+        }
+    }
+
+    async function buscarINaturalist(termo) {
+        try {
+            const url = `https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(termo)}&rank=species&locale=pt-BR&per_page=5`;
+            
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (!data.results || data.results.length === 0) {
+                return [];
+            }
+
+            return data.results.map(item => ({
+                cientifico: item.name || '',
+                popular: item.preferred_common_name || termo,
+                rank: item.rank || '',
+                id: item.id || ''
+            }));
+
+        } catch (error) {
+            console.error('Erro no iNaturalist:', error);
+            return [];
+        }
+    }
+
+    // ============================================================
+    // 4. FUNÇÕES DE INTERFACE
+    // ============================================================
+    function mostrarSugestoes(resultados, box) {
+        let html = '';
+        const maxItems = 10;
+        const items = resultados.slice(0, maxItems);
+        
+        items.forEach((item, index) => {
+            const nomePopular = item.popular || item.cientifico || 'Desconhecido';
+            const nomeCientifico = item.cientifico || 'Não identificado';
+            const rank = item.rank || '';
+            
+            let rankBadge = '';
+            if (rank) {
+                const colors = {
+                    'SPECIES': '#10b981',
+                    'GENUS': '#3b82f6',
+                    'FAMILY': '#8b5cf6',
+                    'SUBSPECIES': '#f59e0b'
+                };
+                const color = colors[rank] || '#94a3b8';
+                rankBadge = `<span style="background: ${color}; color: white; padding: 1px 8px; border-radius: 12px; font-size: 0.65rem;">${rank}</span>`;
+            }
+            
+            html += `
+                <div class="suggestion-item" onclick="selecionarSugestao(${index})" 
+                     data-index="${index}"
+                     style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: #0f172a;">${nomePopular}</div>
+                        <div class="sci-name">${nomeCientifico}</div>
+                    </div>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        ${rankBadge}
+                        <span style="font-size: 0.7rem; color: #94a3b8;">#${index + 1}</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        window.sugestoesAtuais = items;
+        box.innerHTML = html;
+    }
+
+    function selecionarSugestao(index) {
+        const items = window.sugestoesAtuais || [];
+        if (index >= items.length) return;
+        
+        const item = items[index];
+        const nomeCientificoInput = document.getElementById('fd_nome_cientifico');
+        const suggestionsBox = document.getElementById('suggestionsBox');
+        
+        if (item.cientifico) {
+            nomeCientificoInput.value = item.cientifico;
+        }
+        
+        suggestionsBox.classList.remove('active');
+        
+        const certezaSelect = document.getElementById('fd_certeza');
+        if (item.match === 'EXACT' || item.match === 'HIGH') {
+            certezaSelect.value = 'Certeza Absoluta';
+        } else {
+            certezaSelect.value = 'Provável';
+        }
+        
+        const searchingIndicator = document.getElementById('searchingIndicator');
+        searchingIndicator.classList.remove('active');
+        searchingIndicator.innerHTML = '✅ Nome científico sugerido!';
+        searchingIndicator.style.color = '#15803d';
+        
+        setTimeout(() => {
+            searchingIndicator.innerHTML = '🔍 Buscando nome científico...';
+            searchingIndicator.style.color = '#0d9488';
+        }, 3000);
+    }
+
+    function limparSugestoes() {
+        const box = document.getElementById('suggestionsBox');
+        box.classList.remove('active');
+        box.innerHTML = '';
+    }
+
+    function limparBusca() {
+        document.getElementById('fd_nome_comum').value = '';
+        document.getElementById('fd_nome_cientifico').value = '';
+        limparSugestoes();
+        document.getElementById('lastSearchInfo').textContent = '';
+        document.getElementById('searchingIndicator').classList.remove('active');
+    }
+
+    // ============================================================
+    // 5. PREVIEW DAS FOTOS
+    // ============================================================
     let imagensBase64 = [];
 
-    // 1. PREVIEW DAS FOTOS E ARMAZENAMENTO EM BASE64
     function previewImagens(event) {
         const previewBox = document.getElementById("previewBox");
         previewBox.innerHTML = "";
-        imagensBase64 = []; // Limpa o array global
+        imagensBase64 = [];
         const files = event.target.files;
 
         if (files && files.length > 0) {
             Array.from(files).forEach((file, index) => {
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    // Armazena a imagem em Base64
                     imagensBase64.push(e.target.result);
-                    
-                    // Mostra o preview
                     const img = document.createElement("img");
                     img.src = e.target.result;
                     img.title = `Foto ${index + 1}`;
@@ -433,7 +876,9 @@
         }
     }
 
-    // 2. CAPTURA DE GPS
+    // ============================================================
+    // 6. CAPTURA DE GPS
+    // ============================================================
     function obterCoordenadas() {
         const status = document.getElementById("gps_status");
         const latInput = document.getElementById("fd_lat");
@@ -444,7 +889,6 @@
         status.textContent = "⏳ Obtendo sinal do GPS...";
         status.className = "gps-status";
 
-        // Verifica se está em HTTPS
         if (window.location.protocol === 'http:' && 
             window.location.hostname !== 'localhost' && 
             window.location.hostname !== '127.0.0.1') {
@@ -526,7 +970,9 @@
         }
     }
 
-    // 3. FUNÇÃO PARA GERAR HTML DAS FOTOS NO KML
+    // ============================================================
+    // 7. FUNÇÃO PARA GERAR HTML DAS FOTOS NO KML
+    // ============================================================
     function gerarGaleriaFotos() {
         if (imagensBase64.length === 0) {
             return '<p><i>Nenhuma foto anexada.</i></p>';
@@ -549,7 +995,9 @@
         return html;
     }
 
-    // 4. ESCAPE XML
+    // ============================================================
+    // 8. ESCAPE XML
+    // ============================================================
     function escapeXML(str) {
         if (!str) return "";
         return String(str)
@@ -560,7 +1008,9 @@
             .replace(/'/g, '&apos;');
     }
 
-    // 5. GERADOR DE KML COM FOTOS
+    // ============================================================
+    // 9. GERADOR DE KML COM FOTOS
+    // ============================================================
     function gerarKML() {
         const coletor = document.getElementById("fd_nome_coletor").value.trim();
         if (!coletor) {
@@ -578,11 +1028,9 @@
             return;
         }
 
-        // Mostra progresso
         const progresso = document.getElementById("progresso");
         progresso.style.display = "block";
 
-        // Pequeno delay para mostrar o progresso
         setTimeout(() => {
             const dataColeta = document.getElementById("fd_data_coleta").value;
             const nomeComum = document.getElementById("fd_nome_comum").value.trim() || "Árvore Não Identificada";
@@ -595,10 +1043,8 @@
             const precisao = document.getElementById("fd_precisao").value || "N/I";
             const qtdFotos = imagensBase64.length;
 
-            // Gera a galeria de fotos
             const galeriaFotos = gerarGaleriaFotos();
 
-            // Conteúdo do KML com fotos embutidas
             const kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
@@ -661,7 +1107,6 @@
   </Document>
 </kml>`;
 
-            // Download do KML
             const blob = new Blob([kmlContent], { type: 'application/vnd.google-earth.kml+xml;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
@@ -674,12 +1119,13 @@
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
 
-            // Esconde progresso
             progresso.style.display = "none";
         }, 100);
     }
 
-    // 6. GERADOR DE CSV
+    // ============================================================
+    // 10. GERADOR DE CSV
+    // ============================================================
     function gerarCSV() {
         const coletor = document.getElementById("fd_nome_coletor").value.trim();
         if (!coletor) {
@@ -721,8 +1167,32 @@
         URL.revokeObjectURL(url);
     }
 
-    // Inicializa tentando obter coordenadas automaticamente
-    window.addEventListener('load', function() {
+    // ============================================================
+    // 11. FECHA SUGESTÕES AO CLICAR FORA
+    // ============================================================
+    document.addEventListener('click', function(event) {
+        const box = document.getElementById('suggestionsBox');
+        const input = document.getElementById('fd_nome_comum');
+        
+        if (box && input && !box.contains(event.target) && event.target !== input) {
+            box.classList.remove('active');
+        }
+    });
+
+    // ============================================================
+    // 12. INICIALIZAÇÃO
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        // Define a data atual
+        document.getElementById('fd_data_coleta').valueAsDate = new Date();
+        
+        // Verifica se há nome comum preenchido
+        const nomeComumInput = document.getElementById('fd_nome_comum');
+        if (nomeComumInput.value && nomeComumInput.value.length > 2) {
+            buscarNomeCientifico(nomeComumInput.value);
+        }
+        
+        // Tenta obter GPS
         setTimeout(obterCoordenadas, 1500);
     });
 </script>
